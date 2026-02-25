@@ -51,11 +51,11 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
   const [stats, setStats] = useState(statsService.getStats());
   const [isGoogleLinked, setIsGoogleLinked] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [spreadsheetId, setSpreadsheetId] = useState(localStorage.getItem('unika_spreadsheet_id') || '');
-  const [webAppUrl, setWebAppUrl] = useState(localStorage.getItem('unika_webapp_url') || '');
+  const [spreadsheetId, setSpreadsheetId] = useState(localStorage.getItem('unika_spreadsheet_id') || '1vil6J5cubtv08zuR__MS5QxOnZE9tHNl9yUd8xVcZOI');
+  const [webAppUrl, setWebAppUrl] = useState(localStorage.getItem('unika_webapp_url') || 'https://script.google.com/macros/s/AKfycbyfFksBAzO988flBGQpg3HHHhjUG1fvHVi9BMUdkLICwNS3D_F0MxR2C8-nIWiFoDF_9g/exec');
   const [isEditingId, setIsEditingId] = useState(false);
   const [tempId, setTempId] = useState('');
-  const [syncMethod, setSyncMethod] = useState<'oauth' | 'webapp'>(localStorage.getItem('unika_sync_method') as any || 'oauth');
+  const [syncMethod, setSyncMethod] = useState<'oauth' | 'webapp'>(localStorage.getItem('unika_sync_method') as any || 'webapp');
 
   useEffect(() => {
     const savedKeys = localStorage.getItem('unika_api_keys');
