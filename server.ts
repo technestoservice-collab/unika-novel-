@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { ensureStorage, getData, saveData } from "./server/storage.js";
 
 dotenv.config();
 
@@ -82,6 +83,17 @@ app.get("/auth/google/callback", async (req, res) => {
 
 app.get("/api/auth/google/status", (req, res) => {
   res.json({ isAuthenticated: !!(req.session as any).tokens });
+});
+
+// Data Persistence Endpoints
+app.get("/api/data", async (req, res) => {
+  const data = await getData();
+  res.json(data);
+});
+
+app.post("/api/data", async (req, res) => {
+  await saveData(req.body);
+  res.json({ success: true });
 });
 
 // Google Sheets Sync
@@ -229,6 +241,8 @@ app.post("/api/sheets/sync-webapp", async (req, res) => {
 
 // Vite middleware for development
 async function startServer() {
+  await ensureStorage();
+  
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },

@@ -36,6 +36,10 @@ export default function App() {
   const [selectionCoords, setSelectionCoords] = useState<{ x: number, y: number } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    statsService.init();
+  }, []);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 

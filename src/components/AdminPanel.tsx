@@ -52,7 +52,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
   const [isGoogleLinked, setIsGoogleLinked] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [spreadsheetId, setSpreadsheetId] = useState(localStorage.getItem('unika_spreadsheet_id') || '1vil6J5cubtv08zuR__MS5QxOnZE9tHNl9yUd8xVcZOI');
-  const [webAppUrl, setWebAppUrl] = useState(localStorage.getItem('unika_webapp_url') || 'https://script.google.com/macros/s/AKfycbyfFksBAzO988flBGQpg3HHHhjUG1fvHVi9BMUdkLICwNS3D_F0MxR2C8-nIWiFoDF_9g/exec');
+  const [webAppUrl, setWebAppUrl] = useState(localStorage.getItem('unika_webapp_url') || 'https://script.google.com/macros/s/AKfycbyJtkjjZkNUD_tG_20HiIHrCY06uDDBGA4aJnQmcFabawtuvnW2mXrQzBStt3zAqCi0lQ/exec');
   const [isEditingId, setIsEditingId] = useState(false);
   const [tempId, setTempId] = useState('');
   const [syncMethod, setSyncMethod] = useState<'oauth' | 'webapp'>(localStorage.getItem('unika_sync_method') as any || 'webapp');
@@ -136,6 +136,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
     setSpreadsheetId(tempId);
     localStorage.setItem('unika_spreadsheet_id', tempId);
     setIsEditingId(false);
+    statsService.saveToServer();
     alert("Spreadsheet ID updated!");
   };
 
@@ -154,6 +155,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
         localStorage.setItem('unika_webapp_url', webAppUrl);
         localStorage.setItem('unika_sync_method', 'webapp');
         setSyncMethod('webapp');
+        statsService.saveToServer();
         alert("Data synced successfully via Web App!");
       } else {
         throw new Error(result.error);
@@ -305,13 +307,13 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                 </div>
                 <div className="flex bg-stone-100 p-1 rounded-xl">
                   <button 
-                    onClick={() => { setSyncMethod('oauth'); localStorage.setItem('unika_sync_method', 'oauth'); }}
+                    onClick={() => { setSyncMethod('oauth'); localStorage.setItem('unika_sync_method', 'oauth'); statsService.saveToServer(); }}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${syncMethod === 'oauth' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
                   >
                     OAuth2
                   </button>
                   <button 
-                    onClick={() => { setSyncMethod('webapp'); localStorage.setItem('unika_sync_method', 'webapp'); }}
+                    onClick={() => { setSyncMethod('webapp'); localStorage.setItem('unika_sync_method', 'webapp'); statsService.saveToServer(); }}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${syncMethod === 'webapp' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
                   >
                     Web App URL
