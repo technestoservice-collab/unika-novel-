@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Playfair Display", serif;
+}
+
+@layer base {
+  body {
+    @apply bg-stone-50 text-stone-900 antialiased;
+  }
+}
+
+.pdf-container {
+  @apply relative overflow-auto bg-stone-200 p-8 flex justify-center min-h-screen;
+}
+
+.pdf-page {
+  @apply shadow-2xl bg-white mb-8 relative;
+}
+
+.text-layer {
+  @apply absolute top-0 left-0 right-0 bottom-0 opacity-20 pointer-events-auto;
+  line-height: 1;
+}
+
+.text-layer > span {
+  color: transparent;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+}
+
+::selection {
+  @apply bg-amber-200/50;
+}

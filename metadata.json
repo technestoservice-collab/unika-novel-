@@ -1,0 +1,5 @@
+{
+  "name": "Unika Nobel Translator",
+  "description": "Upload PDF novels and translate selected text into various languages, with a focus on natural Bangla. Names remain in English.",
+  "requestFramePermissions": []
+}
