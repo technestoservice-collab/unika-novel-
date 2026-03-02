@@ -1,19 +1,10 @@
 import { GoogleGenAI } from "@google/genai";
+import { statsService } from "./statsService";
 
-// Helper to get the active API key from localStorage or fallback to env
+// Helper to get the active API key
 const getApiKey = () => {
-  if (typeof window !== 'undefined') {
-    const savedKeys = localStorage.getItem('unika_api_keys');
-    if (savedKeys) {
-      try {
-        const keys = JSON.parse(savedKeys);
-        const activeKey = keys.find((k: any) => k.active);
-        if (activeKey) return activeKey.key;
-      } catch (e) {
-        console.error("Error parsing saved API keys", e);
-      }
-    }
-  }
+  const activeKey = statsService.getActiveApiKey();
+  if (activeKey) return activeKey;
   return process.env.GEMINI_API_KEY;
 };
 

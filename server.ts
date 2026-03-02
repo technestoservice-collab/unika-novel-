@@ -8,6 +8,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createServer } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import fs from "fs/promises";
 import { ensureStorage, getData, saveData } from "./server/storage.js";
 
 dotenv.config();
@@ -100,11 +101,44 @@ app.post("/api/data", async (req, res) => {
   res.json({ success: true });
 });
 
+// PDF Sharing Endpoints
+app.post("/api/upload-pdf", express.raw({ type: 'application/pdf', limit: '50mb' }), async (req, res) => {
+  const fileName = req.headers['x-file-name'] as string;
+  if (!fileName) return res.status(400).json({ error: "File name required" });
+
+  try {
+    const pdfPath = path.join(__dirname, 'server', 'data', 'current.pdf');
+    await fs.writeFile(pdfPath, req.body);
+    
+    const data = await getData();
+    data.config.currentFile = fileName;
+    await saveData(data);
+    
+    // Broadcast update so other clients know a new PDF is available
+    broadcastData(data, 'PDF_UPDATE');
+    
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error("PDF upload error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get("/api/current-pdf", async (req, res) => {
+  try {
+    const pdfPath = path.join(__dirname, 'server', 'data', 'current.pdf');
+    await fs.access(pdfPath);
+    res.sendFile(pdfPath);
+  } catch {
+    res.status(404).send("No PDF uploaded yet");
+  }
+});
+
 let wss: WebSocketServer;
 
-function broadcastData(data: any) {
+function broadcastData(data: any, type: string = 'DATA_UPDATE') {
   if (!wss) return;
-  const payload = JSON.stringify({ type: 'DATA_UPDATE', data });
+  const payload = JSON.stringify({ type, data });
   wss.clients.forEach((client) => {
     if (client.readyState === WebSocket.OPEN) {
       client.send(payload);

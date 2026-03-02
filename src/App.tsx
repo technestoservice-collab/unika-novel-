@@ -37,8 +37,44 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    statsService.init();
+    const initApp = async () => {
+      const data = await statsService.init();
+      if (data?.config?.currentFile) {
+        loadPdfFromServer(data.config.currentFile);
+      }
+    };
+    initApp();
+
+    const unsubscribePdf = statsService.onPdfUpdate((fileName) => {
+      loadPdfFromServer(fileName);
+    });
+
+    return () => {
+      unsubscribePdf();
+    };
   }, []);
+
+  const loadPdfFromServer = async (fileName: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/current-pdf');
+      if (!res.ok) throw new Error("Failed to fetch PDF");
+      
+      const blob = await res.blob();
+      const arrayBuffer = await blob.arrayBuffer();
+      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+      const pdfDoc = await loadingTask.promise;
+      
+      setFile({ name: fileName } as File);
+      setPdf(pdfDoc);
+      setNumPages(pdfDoc.numPages);
+      setCurrentPage(1);
+    } catch (error) {
+      console.error('Error loading PDF from server:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -70,6 +106,17 @@ export default function App() {
       setFile(uploadedFile);
       try {
         const arrayBuffer = await uploadedFile.arrayBuffer();
+        
+        // Save to server for sharing
+        await fetch('/api/upload-pdf', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/pdf',
+            'x-file-name': uploadedFile.name
+          },
+          body: arrayBuffer
+        });
+
         const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
         const pdfDoc = await loadingTask.promise;
         setPdf(pdfDoc);

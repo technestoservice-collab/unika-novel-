@@ -20,6 +20,7 @@ interface AppData {
     spreadsheetId: string;
     webAppUrl: string;
     syncMethod: string;
+    currentFile?: string;
   };
 }
 
@@ -35,7 +36,8 @@ const DEFAULT_DATA: AppData = {
   config: {
     spreadsheetId: '1vil6J5cubtv08zuR__MS5QxOnZE9tHNl9yUd8xVcZOI',
     webAppUrl: 'https://script.google.com/macros/s/AKfycbyJtkjjZkNUD_tG_20HiIHrCY06uDDBGA4aJnQmcFabawtuvnW2mXrQzBStt3zAqCi0lQ/exec',
-    syncMethod: 'webapp'
+    syncMethod: 'webapp',
+    currentFile: ''
   }
 };
 

@@ -51,19 +51,25 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
   const [stats, setStats] = useState(statsService.getStats());
   const [isGoogleLinked, setIsGoogleLinked] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [spreadsheetId, setSpreadsheetId] = useState(localStorage.getItem('unika_spreadsheet_id') || '1vil6J5cubtv08zuR__MS5QxOnZE9tHNl9yUd8xVcZOI');
-  const [webAppUrl, setWebAppUrl] = useState(localStorage.getItem('unika_webapp_url') || 'https://script.google.com/macros/s/AKfycbyJtkjjZkNUD_tG_20HiIHrCY06uDDBGA4aJnQmcFabawtuvnW2mXrQzBStt3zAqCi0lQ/exec');
+  const [spreadsheetId, setSpreadsheetId] = useState('');
+  const [webAppUrl, setWebAppUrl] = useState('');
   const [isEditingId, setIsEditingId] = useState(false);
   const [tempId, setTempId] = useState('');
-  const [syncMethod, setSyncMethod] = useState<'oauth' | 'webapp'>(localStorage.getItem('unika_sync_method') as any || 'webapp');
+  const [syncMethod, setSyncMethod] = useState<'oauth' | 'webapp'>('webapp');
 
   useEffect(() => {
-    const savedKeys = localStorage.getItem('unika_api_keys');
-    if (savedKeys) {
-      setApiKeys(JSON.parse(savedKeys));
-    }
-    
     checkGoogleStatus();
+    
+    // Initial load from current cache
+    const currentData = statsService.getAllData();
+    if (currentData.stats) setStats(currentData.stats);
+    if (currentData.apiKeys) setApiKeys(currentData.apiKeys);
+    if (currentData.config) {
+      setSpreadsheetId(currentData.config.spreadsheetId);
+      setWebAppUrl(currentData.config.webAppUrl);
+      setSyncMethod(currentData.config.syncMethod);
+      setTempId(currentData.config.spreadsheetId);
+    }
     
     // Refresh stats
     setStats(statsService.getStats());
@@ -78,11 +84,14 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
 
     // Subscribe to data updates
     const unsubscribeData = statsService.onDataUpdate((data) => {
-      setStats(data.stats);
-      setApiKeys(data.apiKeys);
-      setSpreadsheetId(data.config.spreadsheetId);
-      setWebAppUrl(data.config.webAppUrl);
-      setSyncMethod(data.config.syncMethod);
+      if (data.stats) setStats(data.stats);
+      if (data.apiKeys) setApiKeys(data.apiKeys);
+      if (data.config) {
+        setSpreadsheetId(data.config.spreadsheetId);
+        setWebAppUrl(data.config.webAppUrl);
+        setSyncMethod(data.config.syncMethod);
+        setTempId(data.config.spreadsheetId);
+      }
     });
 
     return () => {
@@ -125,16 +134,14 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
 
   const saveManualId = () => {
     setSpreadsheetId(tempId);
-    localStorage.setItem('unika_spreadsheet_id', tempId);
     setIsEditingId(false);
-    statsService.saveToServer();
+    statsService.updateConfig({ spreadsheetId: tempId });
     alert("Spreadsheet ID updated!");
   };
 
   const saveKeys = (keys: any[]) => {
     setApiKeys(keys);
-    localStorage.setItem('unika_api_keys', JSON.stringify(keys));
-    statsService.saveToServer();
+    statsService.updateApiKeys(keys);
   };
 
   const addApiKey = (e: React.FormEvent) => {
@@ -274,13 +281,13 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                 </div>
                 <div className="flex bg-stone-100 p-1 rounded-xl">
                   <button 
-                    onClick={() => { setSyncMethod('oauth'); localStorage.setItem('unika_sync_method', 'oauth'); statsService.saveToServer(); }}
+                    onClick={() => { setSyncMethod('oauth'); statsService.updateConfig({ syncMethod: 'oauth' }); }}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${syncMethod === 'oauth' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
                   >
                     OAuth2
                   </button>
                   <button 
-                    onClick={() => { setSyncMethod('webapp'); localStorage.setItem('unika_sync_method', 'webapp'); statsService.saveToServer(); }}
+                    onClick={() => { setSyncMethod('webapp'); statsService.updateConfig({ syncMethod: 'webapp' }); }}
                     className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${syncMethod === 'webapp' ? 'bg-white text-stone-900 shadow-sm' : 'text-stone-500'}`}
                   >
                     Web App URL
@@ -362,8 +369,7 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                         value={webAppUrl}
                         onChange={(e) => {
                           setWebAppUrl(e.target.value);
-                          localStorage.setItem('unika_webapp_url', e.target.value);
-                          statsService.saveToServer();
+                          statsService.updateConfig({ webAppUrl: e.target.value });
                         }}
                         placeholder="https://script.google.com/macros/s/.../exec"
                         className="flex-1 p-3 bg-white border border-stone-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-sm"

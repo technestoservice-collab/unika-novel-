@@ -19,11 +19,29 @@ interface AppStats {
 
 const STORAGE_KEY = 'unika_app_stats';
 
-let cachedData: any = null;
+const getInitialStats = (): AppStats => ({
+  totalTranslations: 0,
+  totalWords: 0,
+  totalUploads: 0,
+  dailyStats: [],
+  recentActivity: []
+});
+
+let cachedData: any = {
+  stats: getInitialStats(),
+  apiKeys: [],
+  config: {
+    spreadsheetId: '',
+    webAppUrl: '',
+    syncMethod: 'webapp'
+  }
+};
 let saveTimeout: any = null;
 let isSyncing = false;
+let isLoaded = false;
 const syncListeners: ((status: boolean) => void)[] = [];
 const dataListeners: ((data: any) => void)[] = [];
+const pdfListeners: ((fileName: string) => void)[] = [];
 let ws: WebSocket | null = null;
 
 function connectWS() {
@@ -37,9 +55,11 @@ function connectWS() {
   ws.onmessage = (event) => {
     try {
       const message = JSON.parse(event.data);
-      if (message.type === 'DATA_UPDATE') {
+      if (message.type === 'DATA_UPDATE' || message.type === 'PDF_UPDATE') {
         const data = message.data;
-        // Update local storage and cache
+        cachedData = data;
+        
+        // Update local storage as a cache
         localStorage.setItem(STORAGE_KEY, JSON.stringify(data.stats));
         localStorage.setItem('unika_api_keys', JSON.stringify(data.apiKeys));
         localStorage.setItem('unika_spreadsheet_id', data.config.spreadsheetId);
@@ -48,6 +68,10 @@ function connectWS() {
         
         // Notify listeners
         dataListeners.forEach(cb => cb(data));
+        
+        if (message.type === 'PDF_UPDATE' && data.config.currentFile) {
+          pdfListeners.forEach(cb => cb(data.config.currentFile));
+        }
       }
     } catch (e) {
       console.error("WS message error", e);
@@ -59,20 +83,20 @@ function connectWS() {
   };
 }
 
-const getInitialStats = (): AppStats => ({
-  totalTranslations: 0,
-  totalWords: 0,
-  totalUploads: 0,
-  dailyStats: [],
-  recentActivity: []
-});
-
 export const statsService = {
   onDataUpdate: (callback: (data: any) => void) => {
     dataListeners.push(callback);
     return () => {
       const index = dataListeners.indexOf(callback);
       if (index > -1) dataListeners.splice(index, 1);
+    };
+  },
+
+  onPdfUpdate: (callback: (fileName: string) => void) => {
+    pdfListeners.push(callback);
+    return () => {
+      const index = pdfListeners.indexOf(callback);
+      if (index > -1) pdfListeners.splice(index, 1);
     };
   },
 
@@ -95,22 +119,34 @@ export const statsService = {
     connectWS();
     try {
       const res = await fetch('/api/data');
-      cachedData = await res.json();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cachedData.stats));
-      localStorage.setItem('unika_api_keys', JSON.stringify(cachedData.apiKeys));
-      localStorage.setItem('unika_spreadsheet_id', cachedData.config.spreadsheetId);
-      localStorage.setItem('unika_webapp_url', cachedData.config.webAppUrl);
-      localStorage.setItem('unika_sync_method', cachedData.config.syncMethod);
+      const data = await res.json();
+      cachedData = data;
+      isLoaded = true;
+      
+      // Update local storage as a cache
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.stats));
+      localStorage.setItem('unika_api_keys', JSON.stringify(data.apiKeys));
+      localStorage.setItem('unika_spreadsheet_id', data.config.spreadsheetId);
+      localStorage.setItem('unika_webapp_url', data.config.webAppUrl);
+      localStorage.setItem('unika_sync_method', data.config.syncMethod);
+      
+      // Notify listeners
+      dataListeners.forEach(cb => cb(data));
+      
       return cachedData;
     } catch (e) {
       console.error("Failed to init data from server", e);
+      // Fallback to localStorage if server fails
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        cachedData.stats = JSON.parse(saved);
+        isLoaded = true;
+      }
     }
   },
 
   getStats: (): AppStats => {
-    if (typeof window === 'undefined') return getInitialStats();
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : getInitialStats();
+    return cachedData.stats;
   },
 
   trackTranslation: async (text: string, lang: string) => {
@@ -186,15 +222,12 @@ export const statsService = {
   },
 
   saveToServer: async () => {
+    if (!isLoaded) return;
     if (saveTimeout) clearTimeout(saveTimeout);
     
     saveTimeout = setTimeout(async () => {
       const data = statsService.getAllData();
-      const config = {
-        spreadsheetId: localStorage.getItem('unika_spreadsheet_id') || '',
-        webAppUrl: localStorage.getItem('unika_webapp_url') || '',
-        syncMethod: localStorage.getItem('unika_sync_method') || 'webapp'
-      };
+      const config = cachedData.config;
 
       try {
         await fetch('/api/data', {
@@ -221,8 +254,8 @@ export const statsService = {
   },
 
   triggerSync: async () => {
-    const url = localStorage.getItem('unika_webapp_url');
-    const method = localStorage.getItem('unika_sync_method');
+    const url = cachedData.config.webAppUrl;
+    const method = cachedData.config.syncMethod;
     
     if (url && method === 'webapp') {
       statsService.setSyncing(true);
@@ -242,9 +275,9 @@ export const statsService = {
   },
 
   getAllData: () => {
-    const stats = statsService.getStats();
-    const savedKeys = localStorage.getItem('unika_api_keys');
-    const apiKeys = savedKeys ? JSON.parse(savedKeys) : [];
+    const stats = cachedData.stats;
+    const apiKeys = cachedData.apiKeys;
+    const config = cachedData.config;
     
     return {
       summary: {
@@ -254,7 +287,24 @@ export const statsService = {
       },
       dailyStats: stats.dailyStats,
       recentActivity: stats.recentActivity,
-      apiKeys: apiKeys
+      apiKeys: apiKeys,
+      config: config,
+      stats: stats
     };
+  },
+
+  updateConfig: (newConfig: Partial<any>) => {
+    cachedData.config = { ...cachedData.config, ...newConfig };
+    statsService.saveToServer();
+  },
+
+  updateApiKeys: (newKeys: any[]) => {
+    cachedData.apiKeys = newKeys;
+    statsService.saveToServer();
+  },
+
+  getActiveApiKey: () => {
+    const activeKey = cachedData.apiKeys.find((k: any) => k.active);
+    return activeKey ? activeKey.key : null;
   }
 };
