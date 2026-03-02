@@ -95,9 +95,27 @@ app.get("/api/data", async (req, res) => {
 });
 
 app.post("/api/data", async (req, res) => {
-  await saveData(req.body);
-  // Broadcast to all connected clients
-  broadcastData(req.body);
+  const existingData = await getData();
+  
+  // Deep merge the incoming data with existing data
+  const mergedData = {
+    ...existingData,
+    ...req.body,
+    stats: {
+      ...(existingData.stats || {}),
+      ...(req.body.stats || {})
+    },
+    config: {
+      ...(existingData.config || {}),
+      ...(req.body.config || {})
+    },
+    // For arrays like apiKeys, we usually trust the client's full list
+    apiKeys: req.body.apiKeys || existingData.apiKeys || []
+  };
+
+  await saveData(mergedData);
+  // Broadcast the merged result to all connected clients
+  broadcastData(mergedData);
   res.json({ success: true });
 });
 

@@ -57,17 +57,37 @@ function connectWS() {
       const message = JSON.parse(event.data);
       if (message.type === 'DATA_UPDATE' || message.type === 'PDF_UPDATE') {
         const data = message.data;
-        cachedData = data;
+        
+        // Merge with local data to avoid overwriting unsaved local changes
+        // We prioritize local stats and apiKeys if we are in the middle of a save
+        cachedData = {
+          ...cachedData,
+          ...data,
+          stats: {
+            ...data.stats,
+            // If we have local stats that are "ahead", we might want to keep them,
+            // but usually the server is the source of truth for stats.
+          },
+          config: {
+            ...cachedData.config,
+            ...data.config
+          }
+        };
+        
+        // If we are not currently saving, we can safely take the server's apiKeys
+        if (!saveTimeout) {
+          cachedData.apiKeys = data.apiKeys;
+        }
         
         // Update local storage as a cache
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.stats));
-        localStorage.setItem('unika_api_keys', JSON.stringify(data.apiKeys));
-        localStorage.setItem('unika_spreadsheet_id', data.config.spreadsheetId);
-        localStorage.setItem('unika_webapp_url', data.config.webAppUrl);
-        localStorage.setItem('unika_sync_method', data.config.syncMethod);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cachedData.stats));
+        localStorage.setItem('unika_api_keys', JSON.stringify(cachedData.apiKeys));
+        localStorage.setItem('unika_spreadsheet_id', cachedData.config.spreadsheetId);
+        localStorage.setItem('unika_webapp_url', cachedData.config.webAppUrl);
+        localStorage.setItem('unika_sync_method', cachedData.config.syncMethod);
         
         // Notify listeners
-        dataListeners.forEach(cb => cb(data));
+        dataListeners.forEach(cb => cb(cachedData));
         
         if (message.type === 'PDF_UPDATE' && data.config.currentFile) {
           pdfListeners.forEach(cb => cb(data.config.currentFile));
@@ -120,7 +140,20 @@ export const statsService = {
     try {
       const res = await fetch('/api/data');
       const data = await res.json();
-      cachedData = data;
+      
+      // Merge fetched data with current cachedData (which might have been updated by WS)
+      cachedData = {
+        ...data,
+        ...cachedData,
+        // We trust the server's stats and apiKeys for the initial load
+        stats: data.stats || cachedData.stats,
+        apiKeys: data.apiKeys || cachedData.apiKeys,
+        config: {
+          ...data.config,
+          ...cachedData.config
+        }
+      };
+      
       isLoaded = true;
       
       // Update local storage as a cache
@@ -249,6 +282,8 @@ export const statsService = {
         statsService.triggerSync();
       } catch (e) {
         console.error("Failed to save data to server", e);
+      } finally {
+        saveTimeout = null;
       }
     }, 1000); // 1 second debounce
   },
