@@ -70,14 +70,23 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
     const interval = setInterval(() => {
       setStats(statsService.getStats());
     }, 5000);
-    return () => clearInterval(interval);
+
+    // Subscribe to sync status
+    const unsubscribe = statsService.onSyncStatusChange((status) => {
+      setIsSyncing(status);
+    });
+
+    return () => {
+      clearInterval(interval);
+      unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
       if (event.data?.type === 'GOOGLE_AUTH_SUCCESS') {
         setIsGoogleLinked(true);
-        syncToSheets();
+        statsService.saveToServer();
       }
     };
     window.addEventListener('message', handleMessage);
@@ -104,34 +113,6 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
     }
   };
 
-  const syncToSheets = async () => {
-    if (!isGoogleLinked) return;
-    setIsSyncing(true);
-    try {
-      const data = statsService.getAllData();
-      const res = await fetch('/api/sheets/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ data, spreadsheetId })
-      });
-      const result = await res.json();
-      if (result.success) {
-        setSpreadsheetId(result.spreadsheetId);
-        localStorage.setItem('unika_spreadsheet_id', result.spreadsheetId);
-      } else {
-        throw new Error(result.error);
-      }
-    } catch (e: any) {
-      console.error("Sync error", e);
-      if (e.message?.includes("Not authenticated")) {
-        setIsGoogleLinked(false);
-      }
-      alert("Sync failed: " + e.message);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   const saveManualId = () => {
     setSpreadsheetId(tempId);
     localStorage.setItem('unika_spreadsheet_id', tempId);
@@ -140,38 +121,10 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
     alert("Spreadsheet ID updated!");
   };
 
-  const syncViaWebApp = async () => {
-    if (!webAppUrl) return;
-    setIsSyncing(true);
-    try {
-      const data = statsService.getAllData();
-      const res = await fetch('/api/sheets/sync-webapp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: webAppUrl, data })
-      });
-      const result = await res.json();
-      if (result.success) {
-        localStorage.setItem('unika_webapp_url', webAppUrl);
-        localStorage.setItem('unika_sync_method', 'webapp');
-        setSyncMethod('webapp');
-        statsService.saveToServer();
-        alert("Data synced successfully via Web App!");
-      } else {
-        throw new Error(result.error);
-      }
-    } catch (e: any) {
-      console.error("Web App sync error", e);
-      alert("Web App sync failed: " + e.message);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   const saveKeys = (keys: any[]) => {
     setApiKeys(keys);
     localStorage.setItem('unika_api_keys', JSON.stringify(keys));
-    statsService.triggerSync();
+    statsService.saveToServer();
   };
 
   const addApiKey = (e: React.FormEvent) => {
@@ -376,14 +329,10 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                             <CheckCircle2 className="w-4 h-4" />
                             <span>CONNECTED</span>
                           </span>
-                          <button 
-                            onClick={syncToSheets}
-                            disabled={isSyncing}
-                            className="px-6 py-3 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 transition-all flex items-center space-x-2 disabled:opacity-50"
-                          >
-                            <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-                            <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
-                          </button>
+                          <div className="flex items-center space-x-2 text-emerald-600 text-[10px] font-bold uppercase">
+                            <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                            <span>Auto-Syncing</span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -397,18 +346,18 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
                       <input 
                         type="text"
                         value={webAppUrl}
-                        onChange={(e) => setWebAppUrl(e.target.value)}
+                        onChange={(e) => {
+                          setWebAppUrl(e.target.value);
+                          localStorage.setItem('unika_webapp_url', e.target.value);
+                          statsService.saveToServer();
+                        }}
                         placeholder="https://script.google.com/macros/s/.../exec"
                         className="flex-1 p-3 bg-white border border-stone-200 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-sm"
                       />
-                      <button 
-                        onClick={syncViaWebApp}
-                        disabled={isSyncing || !webAppUrl}
-                        className="px-6 py-3 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 transition-all flex items-center space-x-2 disabled:opacity-50"
-                      >
-                        <RefreshCw className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
-                        <span>{isSyncing ? 'Syncing...' : 'Sync Now'}</span>
-                      </button>
+                      <div className="flex items-center px-4 bg-stone-100 rounded-xl space-x-2 text-emerald-600 text-[10px] font-bold uppercase">
+                        <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                        <span>Auto-Sync Active</span>
+                      </div>
                     </div>
                     <p className="text-[10px] text-stone-400 mt-3">
                       Paste your deployed Web App URL here. Make sure your script has a <code>doPost(e)</code> handler.

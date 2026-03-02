@@ -20,6 +20,9 @@ interface AppStats {
 const STORAGE_KEY = 'unika_app_stats';
 
 let cachedData: any = null;
+let saveTimeout: any = null;
+let isSyncing = false;
+const syncListeners: ((status: boolean) => void)[] = [];
 
 const getInitialStats = (): AppStats => ({
   totalTranslations: 0,
@@ -30,6 +33,21 @@ const getInitialStats = (): AppStats => ({
 });
 
 export const statsService = {
+  onSyncStatusChange: (callback: (status: boolean) => void) => {
+    syncListeners.push(callback);
+    return () => {
+      const index = syncListeners.indexOf(callback);
+      if (index > -1) syncListeners.splice(index, 1);
+    };
+  },
+
+  setSyncing: (status: boolean) => {
+    isSyncing = status;
+    syncListeners.forEach(cb => cb(status));
+  },
+
+  getSyncing: () => isSyncing,
+
   init: async () => {
     try {
       const res = await fetch('/api/data');
@@ -90,7 +108,6 @@ export const statsService = {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
     await statsService.saveToServer();
-    statsService.triggerSync();
   },
 
   trackUpload: async (fileName: string) => {
@@ -122,36 +139,41 @@ export const statsService = {
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(stats));
     await statsService.saveToServer();
-    statsService.triggerSync();
   },
 
   saveToServer: async () => {
-    const data = statsService.getAllData();
-    const config = {
-      spreadsheetId: localStorage.getItem('unika_spreadsheet_id') || '',
-      webAppUrl: localStorage.getItem('unika_webapp_url') || '',
-      syncMethod: localStorage.getItem('unika_sync_method') || 'webapp'
-    };
+    if (saveTimeout) clearTimeout(saveTimeout);
+    
+    saveTimeout = setTimeout(async () => {
+      const data = statsService.getAllData();
+      const config = {
+        spreadsheetId: localStorage.getItem('unika_spreadsheet_id') || '',
+        webAppUrl: localStorage.getItem('unika_webapp_url') || '',
+        syncMethod: localStorage.getItem('unika_sync_method') || 'webapp'
+      };
 
-    try {
-      await fetch('/api/data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          stats: {
-            totalTranslations: data.summary.totalTranslations,
-            totalWords: data.summary.totalWords,
-            totalUploads: data.summary.totalUploads,
-            dailyStats: data.dailyStats,
-            recentActivity: data.recentActivity
-          },
-          apiKeys: data.apiKeys,
-          config
-        })
-      });
-    } catch (e) {
-      console.error("Failed to save data to server", e);
-    }
+      try {
+        await fetch('/api/data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            stats: {
+              totalTranslations: data.summary.totalTranslations,
+              totalWords: data.summary.totalWords,
+              totalUploads: data.summary.totalUploads,
+              dailyStats: data.dailyStats,
+              recentActivity: data.recentActivity
+            },
+            apiKeys: data.apiKeys,
+            config
+          })
+        });
+        // Automatically trigger sync to sheets after saving to server
+        statsService.triggerSync();
+      } catch (e) {
+        console.error("Failed to save data to server", e);
+      }
+    }, 1000); // 1 second debounce
   },
 
   triggerSync: async () => {
@@ -159,6 +181,7 @@ export const statsService = {
     const method = localStorage.getItem('unika_sync_method');
     
     if (url && method === 'webapp') {
+      statsService.setSyncing(true);
       try {
         const data = statsService.getAllData();
         await fetch('/api/sheets/sync-webapp', {
@@ -168,6 +191,8 @@ export const statsService = {
         });
       } catch (e) {
         console.error("Background sync failed", e);
+      } finally {
+        statsService.setSyncing(false);
       }
     }
   },

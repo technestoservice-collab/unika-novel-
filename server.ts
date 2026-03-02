@@ -239,6 +239,21 @@ app.post("/api/sheets/sync-webapp", async (req, res) => {
   }
 });
 
+// Pull from Web App URL
+app.get("/api/sheets/pull", async (req, res) => {
+  const url = req.query.url as string;
+  if (!url) return res.status(400).json({ error: "Web App URL is required" });
+
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
+    res.json(data);
+  } catch (error: any) {
+    console.error("Web App pull error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Vite middleware for development
 async function startServer() {
   await ensureStorage();
