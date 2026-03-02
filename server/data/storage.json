@@ -1,0 +1,28 @@
+{
+  "stats": {
+    "totalTranslations": 0,
+    "totalWords": 0,
+    "totalUploads": 0,
+    "dailyStats": [],
+    "recentActivity": []
+  },
+  "apiKeys": [
+    {
+      "id": "1772438255320",
+      "name": "only text ",
+      "key": "AIzaSyD9vEDXEVRqJwJjBcg1BSLp0KlkeS-d0xc",
+      "active": false
+    },
+    {
+      "id": "1772438393657",
+      "name": "test ",
+      "key": "AIzaSyC_vkaBLDDSJlt3H-9u927X6_n1GRwtn4I",
+      "active": true
+    }
+  ],
+  "config": {
+    "spreadsheetId": "1vil6J5cubtv08zuR__MS5QxOnZE9tHNl9yUd8xVcZOI",
+    "webAppUrl": "https://script.google.com/macros/s/AKfycbymp3eNJv9s5lHif_UBSrHfh3KWl5PDbdprTzUVuYx0gCnl9fqa1JC6O0djc2mBdZo/exec",
+    "syncMethod": "webapp"
+  }
+}
