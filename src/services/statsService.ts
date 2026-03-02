@@ -23,6 +23,41 @@ let cachedData: any = null;
 let saveTimeout: any = null;
 let isSyncing = false;
 const syncListeners: ((status: boolean) => void)[] = [];
+const dataListeners: ((data: any) => void)[] = [];
+let ws: WebSocket | null = null;
+
+function connectWS() {
+  if (typeof window === 'undefined') return;
+  
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const wsUrl = `${protocol}//${window.location.host}`;
+  
+  ws = new WebSocket(wsUrl);
+  
+  ws.onmessage = (event) => {
+    try {
+      const message = JSON.parse(event.data);
+      if (message.type === 'DATA_UPDATE') {
+        const data = message.data;
+        // Update local storage and cache
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data.stats));
+        localStorage.setItem('unika_api_keys', JSON.stringify(data.apiKeys));
+        localStorage.setItem('unika_spreadsheet_id', data.config.spreadsheetId);
+        localStorage.setItem('unika_webapp_url', data.config.webAppUrl);
+        localStorage.setItem('unika_sync_method', data.config.syncMethod);
+        
+        // Notify listeners
+        dataListeners.forEach(cb => cb(data));
+      }
+    } catch (e) {
+      console.error("WS message error", e);
+    }
+  };
+  
+  ws.onclose = () => {
+    setTimeout(connectWS, 3000); // Reconnect after 3s
+  };
+}
 
 const getInitialStats = (): AppStats => ({
   totalTranslations: 0,
@@ -33,6 +68,14 @@ const getInitialStats = (): AppStats => ({
 });
 
 export const statsService = {
+  onDataUpdate: (callback: (data: any) => void) => {
+    dataListeners.push(callback);
+    return () => {
+      const index = dataListeners.indexOf(callback);
+      if (index > -1) dataListeners.splice(index, 1);
+    };
+  },
+
   onSyncStatusChange: (callback: (status: boolean) => void) => {
     syncListeners.push(callback);
     return () => {
@@ -49,6 +92,7 @@ export const statsService = {
   getSyncing: () => isSyncing,
 
   init: async () => {
+    connectWS();
     try {
       const res = await fetch('/api/data');
       cachedData = await res.json();

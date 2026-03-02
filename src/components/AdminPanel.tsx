@@ -72,13 +72,23 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
     }, 5000);
 
     // Subscribe to sync status
-    const unsubscribe = statsService.onSyncStatusChange((status) => {
+    const unsubscribeSync = statsService.onSyncStatusChange((status) => {
       setIsSyncing(status);
+    });
+
+    // Subscribe to data updates
+    const unsubscribeData = statsService.onDataUpdate((data) => {
+      setStats(data.stats);
+      setApiKeys(data.apiKeys);
+      setSpreadsheetId(data.config.spreadsheetId);
+      setWebAppUrl(data.config.webAppUrl);
+      setSyncMethod(data.config.syncMethod);
     });
 
     return () => {
       clearInterval(interval);
-      unsubscribe();
+      unsubscribeSync();
+      unsubscribeData();
     };
   }, []);
 
@@ -235,6 +245,10 @@ export default function AdminPanel({ onBack }: AdminPanelProps) {
             <p className="text-stone-500">Real-time system monitoring and configuration.</p>
           </div>
           <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-2 px-3 py-1 bg-emerald-50 text-emerald-600 rounded-full border border-emerald-100">
+              <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">Live Feed Connected</span>
+            </div>
             <div className="text-right hidden md:block">
               <p className="text-sm font-bold text-stone-900">Admin User</p>
               <p className="text-xs text-stone-500">Super Admin</p>

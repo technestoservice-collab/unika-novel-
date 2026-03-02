@@ -6,6 +6,8 @@ import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createServer } from "http";
+import { WebSocketServer, WebSocket } from "ws";
 import { ensureStorage, getData, saveData } from "./server/storage.js";
 
 dotenv.config();
@@ -93,8 +95,22 @@ app.get("/api/data", async (req, res) => {
 
 app.post("/api/data", async (req, res) => {
   await saveData(req.body);
+  // Broadcast to all connected clients
+  broadcastData(req.body);
   res.json({ success: true });
 });
+
+let wss: WebSocketServer;
+
+function broadcastData(data: any) {
+  if (!wss) return;
+  const payload = JSON.stringify({ type: 'DATA_UPDATE', data });
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  });
+}
 
 // Google Sheets Sync
 app.post("/api/sheets/sync", async (req, res) => {
@@ -258,6 +274,17 @@ app.get("/api/sheets/pull", async (req, res) => {
 async function startServer() {
   await ensureStorage();
   
+  const httpServer = createServer(app);
+
+  wss = new WebSocketServer({ server: httpServer });
+  wss.on('connection', (ws) => {
+    console.log('New WebSocket connection');
+    // Send initial data on connection
+    getData().then(data => {
+      ws.send(JSON.stringify({ type: 'DATA_UPDATE', data }));
+    });
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -271,7 +298,7 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
